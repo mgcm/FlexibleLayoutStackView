@@ -1,5 +1,5 @@
 //
-//  MMViewController.swift
+//  ManualViewController.swift
 //  FlexibleLayoutStackView
 //
 //  Created by Milton Moura on 02/11/15.

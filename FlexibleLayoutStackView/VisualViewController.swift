@@ -1,5 +1,5 @@
 //
-//  ViewController.swift
+//  VisualViewController.swift
 //  FlexibleLayoutStackView
 //
 //  Created by Milton Moura on 01/11/15.
@@ -7,6 +7,7 @@
 //
 
 import UIKit
+
 
 class VisualViewController: UIViewController
 {
