@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+</head>
+<body>
+<h1 id="flexiblelayoutswithswiftanduistackview">Flexible Layouts with Swift and UIStackview</h1>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>In this article we will build a Sign In and Password Recovery form with a single flexible layout, using Swift and the <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/UIStackView_Class_Reference/"><code>UIStackView</code></a>, a new UIKit control available since the release of the iOS 9 SDK. By taking advantage of UIStackView's properties, we will dynamically adapt to the device's orientation and show / hide different form components with automatic animations. All the source code for this article can the found <a href="https://github.com/mgcm/FlexibleLayoutStackView">in this github repository</a>.</p>
+
+<p>[ADD ANIMATED GIF HERE]</p>
+
+<h3 id="autolayout">Auto Layout</h3>
+
+<p><a href="https://developer.apple.com/library/ios/documentation/UserExperience/Conceptual/AutolayoutPG/index.html">Auto Layout</a> has become a requirement for any application that wants to adhere to modern best practices of iOS development. When introduced in iOS 6, is was optional and full visual support in Interface Builder just wasn't there. With the release of iOS 8 and the introduction of <a href="https://developer.apple.com/library/ios/documentation/UserExperience/Conceptual/MobileHIG/LayoutandAppearance.html">Size Classes</a>, the tools and the API improved but you could still dodge and avoid Auto Layout. But now, we are at a point where, in order to fully support all device sizes and <a href="https://developer.apple.com/library/ios/documentation/WindowsViews/Conceptual/AdoptingMultitaskingOniPad/index.html">split-screen multitasking</a> on the iPad, you must embrace it and design your applications with a flexible UI in mind. </p>
+
+<h3 id="theproblemwithautolayout">The problem with Auto Layout</h3>
+
+<p>Auto Layout basically works as an linear equation solver, taking all of the constraints defined in your views and subviews, and calculates the correct sizes and positioning for them. One disadvantage of this approach is that you are obligated to define, typically, between 2 to 6 constraints for each control you add to your view. With different constraint sets for different size classes, the total number of constraints increases considerably and the complexity of managing them increases as well.</p>
+
+<h3 id="enterthestackview">Enter the Stack View</h3>
+
+<p>In order to reduce this complexity, the iOS 9 SDK introduced the <code>UIStackView</code>, an interface control that serves the single purpose of laying out collections of views. An <code>UIStackView</code> will dynamically adapt its containing views' layout to the device's current orientation, screen sizes and other changes in its views. You should keep the following stack view properties in mind:</p>
+
+<ol>
+<li>The views contained in a stack view can be arranged either Vertically or Horizontally, in the order they were added to the <code>arrangedSubviews</code> array</li>
+<li>You can embed stack views within each other, recursively</li>
+<li>The containing views are laid out according to the stack view's <code>[distribution](...)</code> and <code>[alignment](...)</code> types. These attributes specify how the view collection is laid out across the span of the stack view (distribution) and how to align all subviews within the stack view's container (alignment)</li>
+<li>Most properties are animatable and inserting / deleting / hiding / showing views within an animation block will also be animated</li>
+<li>Even though you can use a stack view within an <code>UIScrollView</code>, don't try to replicate the behaviour of an <code>UITableView</code> or <code>UICollectionView</code>, as you'll soon regret it.</li>
+</ol>
+
+<p>Apple recommends that you use <code>UIStackView</code> for all cases, as it will seriously reduce constraint overhead. Just be sure to judiciously use compression and content hugging priorities to solve possible layout ambiguities.</p>
+
+<h2 id="aflexiblesigninrecoverform">A Flexible Sign In / Recover Form</h2>
+
+<p>The sample application we'll build features a simple Sign In form, with the option for recovering a forgotten password, all in a single screen. </p>
+
+<p>When tapping on the &quot;Forgot your password?&quot; button, the form will change, hiding the password text field and showing the new call-to-action buttons and message labels. By canceling the password recovery action, these new controls will be hidden once again and the form will return to it's initial state.</p>
+
+<h3 id="1.creatingtheform">1. Creating the form</h3>
+
+<p>This is what the form will look like when we're done. Let's start by creating a new iOS &gt; Single View Application template.</p>
+
+<figure>
+<img src="https://raw.githubusercontent.com/mgcm/FlexibleLayoutStackView/master/Screenshots/%231.png" alt="" />
+</figure>
+
+<p>Then, we add a new <code>UIStackView</code> to the ViewController and add some constraints for positioning it within it's parent view. Since we want a full screen width vertical form, we set its axis to <code>.Vertical</code>, the alignment to <code>.Fill</code> and the distribution to <code>.FillProportionally</code>, so that individual views within the stack view can grow bigger or smaller, according to their content.</p>
+
+<pre><code>    class ViewController : UIViewController
+    {
+        let formStackView = UIStackView()
+        ...
+        override func viewDidLoad() {
+            super.viewDidLoad()
+
+            // Initialize the top-level form stack view
+            formStackView.axis = .Vertical
+            formStackView.alignment = .Fill
+            formStackView.distribution = .FillProportionally
+            formStackView.spacing = 8
+            formStackView.translatesAutoresizingMaskIntoConstraints = false
+
+            view.addSubview(formStackView)
+
+            // Anchor it to the parent view
+            view.addConstraints(
+                NSLayoutConstraint.constraintsWithVisualFormat(&quot;H:|-20-[formStackView]-20-|&quot;, options: [.AlignAllRight,.AlignAllLeft], metrics: nil, views: [&quot;formStackView&quot;: formStackView])
+            )
+            view.addConstraints(
+                NSLayoutConstraint.constraintsWithVisualFormat(&quot;V:|-20-[formStackView]-8-|&quot;, options: [.AlignAllTop,.AlignAllBottom], metrics: nil, views: [&quot;formStackView&quot;: formStackView])
+            )
+            ...
+        }
+    }
+</code></pre>
+
+<p>Next, we'll add all the fields and buttons that make up our form. We'll only present a couple of them here as the rest of the code is boilerplate. In order to refrain <code>UIStackView</code> from growing the height of our inputs and buttons as needed to fill vertical space, we add height constraints to set the maximum value for their vertical size.</p>
+
+<pre><code>    class ViewController : UIViewController 
+    {
+        ...
+        var passwordField: UITextField!
+        var signInButton: UIButton!
+        var signInLabel: UILabel!
+        var forgotButton: UIButton!
+        var backToSignIn: UIButton!
+        var recoverLabel: UILabel!
+        var recoverButton: UIButton!
+        ...
+
+        override func viewDidLoad() {
+            ...
+
+            // Add the email field
+            let emailField = UITextField()
+            emailField.translatesAutoresizingMaskIntoConstraints = false
+            emailField.borderStyle = .RoundedRect
+            emailField.placeholder = &quot;Email Address&quot;
+            formStackView.addArrangedSubview(emailField)
+
+            // Make sure we have a height constraint, so it doesn't change according to the stackview auto-layout
+            emailField.addConstraints(
+                NSLayoutConstraint.constraintsWithVisualFormat(&quot;V:[emailField(&lt;=30)]&quot;, options: [.AlignAllTop, .AlignAllBottom], metrics: nil, views: [&quot;emailField&quot;: emailField])
+            )
+
+            // Add the password field
+            passwordField = UITextField()
+            passwordField.translatesAutoresizingMaskIntoConstraints = false
+            passwordField.borderStyle = .RoundedRect
+            passwordField.placeholder = &quot;Password&quot;
+            formStackView.addArrangedSubview(passwordField)
+
+            // Make sure we have a height constraint, so it doesn't change according to the stackview auto-layout
+            passwordField.addConstraints(
+                NSLayoutConstraint.constraintsWithVisualFormat(&quot;V:[passwordField(&lt;=30)]&quot;, options: .AlignAllCenterY, metrics: nil, views: [&quot;passwordField&quot;: passwordField])
+            )
+            ...
+        }
+    }
+</code></pre>
+
+<h3 id="2.animatingbyshowinghidingspecificviews">2. Animating by showing / hiding specific views</h3>
+
+<p>By taking advantage of the previously mentioned properties of <code>UIStackView</code>, we can transition from the Sign In form to the Password Recovery form by showing and hiding specific field and buttons. We do this by setting the <code>hidden</code> property within a <code>UIView.animateWithDuration</code> block.</p>
+
+<pre><code>    class ViewController : UIViewController
+    {
+        ...
+        // Callback target for the Forgot my password button, animates old and new controls in / out
+        func forgotTapped(sender: AnyObject) {
+            UIView.animateWithDuration(0.2) { [weak self] () -&gt; Void in
+                self?.signInButton.hidden = true
+                self?.signInLabel.hidden = true
+                self?.forgotButton.hidden = true
+                self?.passwordField.hidden = true
+                self?.recoverButton.hidden = false
+                self?.recoverLabel.hidden = false
+                self?.backToSignIn.hidden = false
+            }
+        }
+
+        // Callback target for the Back to Sign In button, animates old and new controls in / out
+        func backToSignInTapped(sender: AnyObject) {
+            UIView.animateWithDuration(0.2) { [weak self] () -&gt; Void in
+                self?.signInButton.hidden = false
+                self?.signInLabel.hidden = false
+                self?.forgotButton.hidden = false
+                self?.passwordField.hidden = false
+                self?.recoverButton.hidden = true
+                self?.recoverLabel.hidden = true
+                self?.backToSignIn.hidden = true
+            }
+        }
+        ...
+    }
+</code></pre>
+
+<h3 id="3.handlingdifferentsizeclasses">3. Handling different Size Classes</h3>
+
+<p>Because we have many vertical input fields and buttons, space can become an issue when presenting in a compact vertical size, like the iPhone in landscape. To overcome this, we add a stack view to the header section of the form and change its axis orientation between Vertical and Horizontal, according to the current active size class.</p>
+
+<pre><code>    override func viewDidLoad() {
+        ...
+        // Initialize the header stack view, that will change orientation type according to the current size class
+        headerStackView.axis = .Vertical
+        headerStackView.alignment = .Fill
+        headerStackView.distribution = .Fill
+        headerStackView.spacing = 8
+        headerStackView.translatesAutoresizingMaskIntoConstraints = false
+        ...
+    }
+
+    // If we are presenting in a Compact Vertical Size Class, let's change the header stack view axis orientation
+    override func willTransitionToTraitCollection(newCollection: UITraitCollection, withTransitionCoordinator coordinator: UIViewControllerTransitionCoordinator) {
+        if newCollection.verticalSizeClass == .Compact  {
+            headerStackView.axis = .Horizontal
+        } else {
+            headerStackView.axis = .Vertical
+        }
+    }
+</code></pre>
+
+<h3 id="4.theflexibleformlayout">4. The flexible form layout</h3>
+
+<p>So, with a couple of <code>UIStackView</code>s, we've built a flexible form only by defining a few height constraints for our input fields and buttons, with all the remaining constraints magically managed by the stack views. Here is the end result:</p>
+
+<p>[ADD ANIMATED GIF]</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>We have included in the <a href="https://github.com/mgcm/FlexibleLayoutStackView">sample source code</a> a view controller with this same example but designed with Interface Builder. There, you can clearly see that we have less than 10 constraints, on a layout that could easily have up to 40-50 constraints if we had not used <code>UIStackView</code>. Stack Views are here to stay and you should use them now if you are targeting iOS 9 and above.</p>
+
+</body>
+</html>
